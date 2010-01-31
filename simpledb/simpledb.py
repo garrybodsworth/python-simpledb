@@ -804,7 +804,7 @@ class Query(object):
     def all(self):
         return self._clone()
 
-    def limit(self, limit):
+    def set_limit(self, limit):
         q = self._clone()
         q.limit = limit
         return q
@@ -877,10 +877,13 @@ class Query(object):
         q.where = self.where._clone()
         q.fields = self.fields[:]
         q.order = self.order
+        q.limit = self.limit
         q.__dict__.update(kwargs)
         return q
 
     def _get_results(self):
+        if not self.limit:
+            self.limit = 250
         if self._result_cache is None:
             self._result_cache = self.domain.select(self.to_expression())
         return self._result_cache
