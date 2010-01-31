@@ -9,6 +9,9 @@ try:
 except ImportError:
     import elementtree.ElementTree as ET
 from UserDict import DictMixin
+import logging
+logging.basicConfig(level = logging.DEBUG)
+log = logging.getLogger('psdb.psdb')
 
 
 __all__ = ['SimpleDB', 'Domain', 'Item', 'AttributeEncoder', 'where', 'every', 'item_name', 'SimpleDBError', 'ItemDoesNotExist']
