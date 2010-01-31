@@ -176,6 +176,26 @@ class Manager(object):
     def get(self, name):
         return self.model.from_item(self.model.Meta.domain.get(name))
 
+    def get_items(self, names):
+        if not isinstance(names, (list, str)):
+            raise TypeError("parameter 'names' must of type either string or list of strings")
+        if not isinstance(names, list) and isinstance(names, str):
+            names = [names]
+        return [self.model.from_item(\
+                self.model.Meta.domain.get(name))
+                for name in names]
+
+    def set_limit(self, limit):
+        return self._get_query().set_limit(limit)
+    
+    def select(self, query, next_token = None):
+        set_next_token = lambda x: x.text if x!=None else x
+        result = self.model.Meta.domain.select(query, next_token)
+        return {'items': [self.model.from_item(item) for item in 
+                          result['items']],
+                'next_token': set_next_token(result['next_token'])
+                }
+
     def _get_query(self):
         return Query(self.model.Meta.domain)
 
