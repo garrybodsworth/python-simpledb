@@ -225,6 +225,7 @@ class SimpleDB(object):
             self.scheme = 'http'
         self.db = db
         self.encoder = encoder
+        self.next_token = None
 
     def _make_request(self, request):
         headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8', 
@@ -535,37 +536,39 @@ class SimpleDB(object):
                 attributes[name] = value
         return attributes
 
-    def _select(self, domain, expression):
+    def _select(self, domain, expression, next_token):
         if not isinstance(domain, Domain):
             domain = Domain(domain, self)
         data = {
             'Action': 'Select',
             'SelectExpression': expression,
         }
+        if next_token:
+            data['NextToken'] = next_token
 
-        while True:
-            request = Request("POST", self._sdb_url(), data)
-            response = self._make_request(request)
+        request = Request("POST", self._sdb_url(), data)
+        response = self._make_request(request)
 
-            e = ET.fromstring(response.content)
-            item_node = e.find('{%s}SelectResult' % self.ns)
-            if item_node is not None:
-                for item in item_node.findall('{%s}Item' % self.ns):
-                    name = item.findtext('{%s}Name' % self.ns)
-                    attributes = self._parse_attributes(domain, item)
-                    yield Item(self, domain, name, attributes)
+        e = ET.fromstring(response.content)
+        item_node = e.find('{%s}SelectResult' % self.ns)
+        if item_node is not None:
+            for item in item_node.findall('{%s}Item' % self.ns):
+                name = item.findtext('{%s}Name' % self.ns)
+                attributes = self._parse_attributes(domain, item)
+                yield Item(self, domain, name, attributes)
+                
+            # SimpleDB will return a max of 100 items per request, and
+            # will return a NextToken if there are more.
+            next_token = item_node.find('{%s}NextToken' % self.ns)
+            self.next_token = next_token
 
-                # SimpleDB will return a max of 100 items per request, and
-                # will return a NextToken if there are more.
-                next_token = item_node.find('{%s}NextToken' % self.ns)
-                if next_token is None:
-                    break
-                data['NextToken'] = next_token.text
-            else:
-                break
+    def select(self, domain, expression, next_token = None):
+        return {'items':list(self._select(domain, expression, next_token)),
+                'next_token': self.next_token}
 
-    def select(self, domain, expression):
-        return list(self._select(domain, expression))
+    def get_next_token(self):
+        return self.next_token
+
 
     def __iter__(self):
         return self._list_domains()
@@ -909,8 +912,9 @@ class Domain(object):
     def filter(self, *args, **kwargs):
         return self._get_query().filter(*args, **kwargs)
 
-    def select(self, expression):
-        return self.simpledb.select(self, expression)
+    def select(self, expression, next_token = None):
+        return self.simpledb.select(self, expression,
+                                    next_token = next_token)
 
     def all(self):
         return self._get_query()
