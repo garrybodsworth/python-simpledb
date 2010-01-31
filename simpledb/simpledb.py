@@ -476,10 +476,18 @@ class SimpleDB(object):
             'DomainName': domain,
             'ItemName': item,
         }
-        for i, (name, value) in enumerate(attributes.iteritems()):
-            value = self.encoder.encode(domain, name, value)
-            data['Attribute.%s.Name' % i] = name
-            data['Attribute.%s.Value' % i] = value
+        i = 0
+        for name, values in attributes.iteritems():
+            if values == None:
+                data['Attribute.%s.Name' % i] = name    
+                continue
+            if isinstance(values, str):
+                values = [values]
+            for value in values:
+                value = self.encoder.encode(domain, name, value)
+                data['Attribute.%s.Name' % i] = name
+                data['Attribute.%s.Value' % i] = value
+                i = i + 1
         request = Request("POST", self._sdb_url(), data)
         self._make_request(request)
 
