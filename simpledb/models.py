@@ -327,6 +327,13 @@ class Model(object):
         obj._item = item
         for name, field in obj.fields.items():
             if name in obj._item:
+                ##fix for the case when there is only one value in a multivalued attribute.
+                ##psdb.simpledb._parse_attributes does not and cannot (since it does not know about models) 
+                ##takes care of this.
+                ##but this requires a default to be specified in the field declaration
+                if isinstance(obj.__getattribute__(name), list) and isinstance(obj._item[name], str):
+                    obj._item[name] = [obj._item[name]]
+                ##
                 setattr(obj, name, obj._item[name])
         setattr(obj, obj._name_field, obj._item.name)
         return obj
