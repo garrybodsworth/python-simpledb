@@ -1,6 +1,7 @@
 import simpledb
 import datetime
-
+import uuid 
+import config
 
 __all__ = ['FieldError', 'Field', 'NumberField', 'BooleanField', 'DateTimeField', 'Manager', 'Model']
 
@@ -271,6 +272,9 @@ class Model(object):
     __metaclass__ = ModelMetaclass
 
     def __init__(self, **kwargs):
+        if config.AUTO_GENERATE_MISSING_KEY and \
+                not kwargs.get('id'):
+            self.id = uuid.uuid4()
         for name, value in kwargs.items():
             setattr(self, name, value)
         self._item = None
