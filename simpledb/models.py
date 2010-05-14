@@ -2,7 +2,7 @@ import simpledb
 import datetime
 
 
-__all__ = ['FieldError', 'Field', 'NumberField', 'BooleanField', 'DateTimeField', 'Manager', 'Model']
+__all__ = ['ItemName', 'FieldError', 'Field', 'NumberField', 'BooleanField', 'DateTimeField', 'Manager', 'Model']
 
 
 class FieldError(Exception): pass
@@ -11,9 +11,10 @@ class FieldError(Exception): pass
 class Field(object):
     name = False
 
-    def __init__(self, default=None, required=False):
+    def __init__(self, default=None, required=False, islist=False):
         self.default = default
         self.required = required
+        self.islist = islist
 
     def install(self, name, cls):
         default = self.default
@@ -24,6 +25,8 @@ class Field(object):
 
     def decode(self, value):
         """Decodes an object from the datastore into a python object."""
+        if self.islist and not isinstance(value, (list, tuple)):
+            return [value]
         return value
 
     def encode(self, value):
@@ -55,14 +58,14 @@ class NumberField(Field):
         if self.precision > 0 and self.padding > 0:
             # Padding shouldn't include decimal digits or the decimal point.
             padding += self.precision + 1
-        return ('%%0%d.%df' % (padding, self.precision)) % (value + self.offset)
+        return super(NumberField, self).encode(('%%0%d.%df' % (padding, self.precision)) % (value + self.offset))
 
     def decode(self, value):
         """
         Decoding converts a string into a numerical type then shifts it by the
         offset.
         """
-        return float(value) - self.offset
+        return super(NumberField, self).decode(float(value) - self.offset)
 
 
 class BooleanField(Field):
@@ -70,13 +73,13 @@ class BooleanField(Field):
         """
         Converts a python boolean into a string '1'/'0' for storage in SimpleDB.
         """
-        return ('0','1')[value]
+        return super(BooleanField, self).encode(('0','1')[value])
 
     def decode(self, value):
         """
         Converts an encoded string '1'/'0' into a python boolean object.
         """
-        return {'0': False, '1': True}[value]
+        return super(BooleanField, self).decode({'0': False, '1': True}[value])
 
 
 class DateTimeField(Field):
@@ -90,14 +93,14 @@ class DateTimeField(Field):
         `format` attribute. The default format is ISO 8601, which supports
         lexicographical order comparisons.
         """
-        return value.strftime(self.format)
+        return super(DateTimeField, self).encode(value.strftime(self.format))
     
     def decode(self, value):
         """
         Decodes a string representation of a date and time into a python
         datetime object.
         """
-        return datetime.datetime.strptime(value, self.format)
+        return super(DateTimeField, self).decode(datetime.datetime.strptime(value, self.format))
 
 
 class FieldEncoder(simpledb.AttributeEncoder):
@@ -291,7 +294,7 @@ class Model(object):
                 else:
                     del self._item[name]
                     continue
-            self._item[name] = getattr(self, name)
+            self._item[name] = field.encode(getattr(self, name))
         self._item.save()
 
     def delete(self):
@@ -303,6 +306,6 @@ class Model(object):
         obj._item = item
         for name, field in obj.fields.items():
             if name in obj._item:
-                setattr(obj, name, obj._item[name])
+                setattr(obj, name, field.decode(obj._item[name]))
         setattr(obj, obj._name_field, obj._item.name)
         return obj
