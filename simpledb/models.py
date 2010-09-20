@@ -1,6 +1,7 @@
 import simpledb
 import datetime
-
+import uuid
+import config
 
 __all__ = ['ItemName', 'FieldError', 'Field', 'NumberField', 'BooleanField', 'DateTimeField', 'Manager', 'Model']
 
@@ -94,7 +95,7 @@ class DateTimeField(Field):
         lexicographical order comparisons.
         """
         return super(DateTimeField, self).encode(value.strftime(self.format))
-    
+
     def decode(self, value):
         """
         Decodes a string representation of a date and time into a python
@@ -133,7 +134,7 @@ class Query(simpledb.Query):
 
     def _get_results(self):
         if self._result_cache is None:
-            self._result_cache = [self.domain.model.from_item(item) for item in 
+            self._result_cache = [self.domain.model.from_item(item) for item in
                                   self.domain.select(self.to_expression())]
         return self._result_cache
 
@@ -178,6 +179,26 @@ class Manager(object):
     def get(self, name):
         return self.model.from_item(self.model.Meta.domain.get(name))
 
+    def get_items(self, names):
+        if not isinstance(names, (list, str)):
+            raise TypeError("parameter 'names' must of type either string or list of strings")
+        if not isinstance(names, list) and isinstance(names, str):
+            names = [names]
+        return [self.model.from_item(\
+                self.model.Meta.domain.get(name))
+                for name in names]
+
+    def set_limit(self, limit):
+        return self._get_query().set_limit(limit)
+
+    def select(self, query, next_token = None):
+        set_next_token = lambda x: x.text if x!=None else x
+        result = self.model.Meta.domain.select(query, next_token)
+        return {'items': [self.model.from_item(item) for item in
+                          result['items']],
+                'next_token': set_next_token(result['next_token'])
+                }
+
     def _get_query(self):
         return Query(self.model.Meta.domain)
 
@@ -196,7 +217,7 @@ class ManagerDescriptor(object):
 
 class ModelMetaclass(type):
     """
-    Metaclass for `simpledb.models.Model` instances. Installs 
+    Metaclass for `simpledb.models.Model` instances. Installs
     `simpledb.models.Field` instances declared as attributes of the
     new class.
     """
@@ -253,7 +274,7 @@ class ModelMetaclass(type):
                 new_cls.Meta.domain = simpledb.Domain(new_cls.Meta.domain, new_cls.Meta.connection)
             # Install a reference to the new model class on the Meta.domain so
             # Query can use it.
-            # TODO: Should we be using weakref here? Not sure it matters since it's 
+            # TODO: Should we be using weakref here? Not sure it matters since it's
             # a class (global) that's long lived anyways.
             new_cls.Meta.domain.model = new_cls
 
@@ -274,6 +295,9 @@ class Model(object):
     __metaclass__ = ModelMetaclass
 
     def __init__(self, **kwargs):
+        if config.AUTO_GENERATE_MISSING_KEY and \
+                not kwargs.get('id'):
+            self.id = uuid.uuid4()
         for name, value in kwargs.items():
             setattr(self, name, value)
         self._item = None
@@ -306,6 +330,13 @@ class Model(object):
         obj._item = item
         for name, field in obj.fields.items():
             if name in obj._item:
+                ##fix for the case when there is only one value in a multivalued attribute.
+                ##psdb.simpledb._parse_attributes does not and cannot (since it does not know about models)
+                ##takes care of this.
+                ##but this requires a default to be specified in the field declaration
+                if isinstance(obj.__getattribute__(name), list) and isinstance(obj._item[name], str):
+                    obj._item[name] = [obj._item[name]]
+                ##
                 setattr(obj, name, field.decode(obj._item[name]))
-        setattr(obj, obj._name_field, obj._item.name)
+        setattr(obj, obj._name_field, field.decode(obj._item.name))
         return obj

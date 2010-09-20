@@ -1,6 +1,6 @@
-import httplib2
 import urlparse
 import urllib
+import urllib2
 import time
 import hmac
 import base64
@@ -9,6 +9,9 @@ try:
 except ImportError:
     import elementtree.ElementTree as ET
 from UserDict import DictMixin
+import logging
+logging.basicConfig(level = logging.DEBUG)
+log = logging.getLogger('psdb.psdb')
 
 
 __all__ = ['SimpleDB', 'Domain', 'Item', 'AttributeEncoder', 'where', 'every', 'item_name', 'SimpleDBError', 'ItemDoesNotExist']
@@ -221,15 +224,17 @@ class SimpleDB(object):
         else:
             self.scheme = 'http'
         self.db = db
-        self.http = httplib2.Http()
         self.encoder = encoder
+        self.next_token = None
 
     def _make_request(self, request):
         headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8', 
                    'host': self.db}
         request.set_parameter('Version', self.service_version)
         request.sign_request(self.signature_method(), self.aws_key, self.aws_secret)
-        response, content = self.http.request(request.url, request.method, headers=headers, body=request.to_postdata())
+        req = urllib2.Request(request.url, headers)
+        response = urllib2.urlopen(req, request.to_postdata(), 10)
+        content = response.read()
         e = ET.fromstring(content)
 
         error = e.find('Errors/Error')
@@ -471,10 +476,18 @@ class SimpleDB(object):
             'DomainName': domain,
             'ItemName': item,
         }
-        for i, (name, value) in enumerate(attributes.iteritems()):
-            value = self.encoder.encode(domain, name, value)
-            data['Attribute.%s.Name' % i] = name
-            data['Attribute.%s.Value' % i] = value
+        i = 0
+        for name, values in attributes.iteritems():
+            if values == None:
+                data['Attribute.%s.Name' % i] = name    
+                continue
+            if isinstance(values, str):
+                values = [values]
+            for value in values:
+                value = self.encoder.encode(domain, name, value)
+                data['Attribute.%s.Name' % i] = name
+                data['Attribute.%s.Value' % i] = value
+                i = i + 1
         request = Request("POST", self._sdb_url(), data)
         self._make_request(request)
 
@@ -531,37 +544,39 @@ class SimpleDB(object):
                 attributes[name] = value
         return attributes
 
-    def _select(self, domain, expression):
+    def _select(self, domain, expression, next_token):
         if not isinstance(domain, Domain):
             domain = Domain(domain, self)
         data = {
             'Action': 'Select',
             'SelectExpression': expression,
         }
+        if next_token:
+            data['NextToken'] = next_token
 
-        while True:
-            request = Request("POST", self._sdb_url(), data)
-            response = self._make_request(request)
+        request = Request("POST", self._sdb_url(), data)
+        response = self._make_request(request)
 
-            e = ET.fromstring(response.content)
-            item_node = e.find('{%s}SelectResult' % self.ns)
-            if item_node is not None:
-                for item in item_node.findall('{%s}Item' % self.ns):
-                    name = item.findtext('{%s}Name' % self.ns)
-                    attributes = self._parse_attributes(domain, item)
-                    yield Item(self, domain, name, attributes)
+        e = ET.fromstring(response.content)
+        item_node = e.find('{%s}SelectResult' % self.ns)
+        if item_node is not None:
+            for item in item_node.findall('{%s}Item' % self.ns):
+                name = item.findtext('{%s}Name' % self.ns)
+                attributes = self._parse_attributes(domain, item)
+                yield Item(self, domain, name, attributes)
+                
+            # SimpleDB will return a max of 100 items per request, and
+            # will return a NextToken if there are more.
+            next_token = item_node.find('{%s}NextToken' % self.ns)
+            self.next_token = next_token
 
-                # SimpleDB will return a max of 100 items per request, and
-                # will return a NextToken if there are more.
-                next_token = item_node.find('{%s}NextToken' % self.ns)
-                if next_token is None:
-                    break
-                data['NextToken'] = next_token.text
-            else:
-                break
+    def select(self, domain, expression, next_token = None):
+        return {'items':list(self._select(domain, expression, next_token)),
+                'next_token': self.next_token}
 
-    def select(self, domain, expression):
-        return list(self._select(domain, expression))
+    def get_next_token(self):
+        return self.next_token
+
 
     def __iter__(self):
         return self._list_domains()
@@ -789,7 +804,7 @@ class Query(object):
     def all(self):
         return self._clone()
 
-    def limit(self, limit):
+    def set_limit(self, limit):
         q = self._clone()
         q.limit = limit
         return q
@@ -862,10 +877,13 @@ class Query(object):
         q.where = self.where._clone()
         q.fields = self.fields[:]
         q.order = self.order
+        q.limit = self.limit
         q.__dict__.update(kwargs)
         return q
 
     def _get_results(self):
+        if not self.limit:
+            self.limit = 250
         if self._result_cache is None:
             self._result_cache = self.domain.select(self.to_expression())
         return self._result_cache
@@ -905,8 +923,9 @@ class Domain(object):
     def filter(self, *args, **kwargs):
         return self._get_query().filter(*args, **kwargs)
 
-    def select(self, expression):
-        return self.simpledb.select(self, expression)
+    def select(self, expression, next_token = None):
+        return self.simpledb.select(self, expression,
+                                    next_token = next_token)
 
     def all(self):
         return self._get_query()
