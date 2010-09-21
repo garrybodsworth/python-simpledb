@@ -10,7 +10,6 @@ except ImportError:
     import elementtree.ElementTree as ET
 from UserDict import DictMixin
 import logging
-logging.basicConfig(level = logging.DEBUG)
 log = logging.getLogger('psdb.psdb')
 
 
@@ -141,8 +140,8 @@ class Request(object):
         signature in the proper order.
 
         """
-        return urlencode([(_utf8_str(k), _utf8_str(v)) for k, v in 
-                            sorted(self.parameters.iteritems()) 
+        return urlencode([(_utf8_str(k), _utf8_str(v)) for k, v in
+                            sorted(self.parameters.iteritems())
                             if k != 'Signature'])
 
     def get_normalized_http_method(self):
@@ -204,7 +203,7 @@ class SimpleDB(object):
         signature_method = SignatureMethod_HMAC_SHA1
 
 
-    def __init__(self, aws_access_key, aws_secret_access_key, db='sdb.amazonaws.com', 
+    def __init__(self, aws_access_key, aws_secret_access_key, db='sdb.amazonaws.com',
                  secure=True, encoder=AttributeEncoder()):
         """
         Use your `aws_access_key` and `aws_secret_access_key` to create a connection to
@@ -213,7 +212,7 @@ class SimpleDB(object):
         SimpleDB requests are directed to the host specified by `db`, which defaults to
         ``sdb.amazonaws.com``.
 
-        The optional `secure` argument specifies whether HTTPS should be used. The 
+        The optional `secure` argument specifies whether HTTPS should be used. The
         default value is ``True``.
         """
 
@@ -228,7 +227,7 @@ class SimpleDB(object):
         self.next_token = None
 
     def _make_request(self, request):
-        headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8', 
+        headers = {'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8',
                    'host': self.db}
         request.set_parameter('Version', self.service_version)
         request.sign_request(self.signature_method(), self.aws_key, self.aws_secret)
@@ -254,9 +253,9 @@ class SimpleDB(object):
         """
         Creates a new domain.
 
-        The domain `name` argument must be a string, and must be unique among 
-        the domains associated with your AWS Access Key. The CreateDomain operation 
-        may take 10 or more seconds to complete. By default, you can create up to 
+        The domain `name` argument must be a string, and must be unique among
+        the domains associated with your AWS Access Key. The CreateDomain operation
+        may take 10 or more seconds to complete. By default, you can create up to
         100 domains per account.
 
         Returns the newly created `Domain` object.
@@ -269,14 +268,14 @@ class SimpleDB(object):
         request = Request("POST", self._sdb_url(), data)
         self._make_request(request)
         return Domain(name, self)
-    
+
     def delete_domain(self, domain):
         """
         Deletes a domain. Any items (and their attributes) in the domain are
         deleted as well. The DeleteDomain operation may take 10 or more seconds
         to complete.
 
-        The `domain` argument can be a string representing the name of the 
+        The `domain` argument can be a string representing the name of the
         domain, or a `Domain` object.
         """
 
@@ -364,15 +363,15 @@ class SimpleDB(object):
         domain and item names, or `Domain` and `Item` objects, respectively.
 
         The `attributes` argument should be a dictionary containing the
-        attribute names -> values that you would like stored for the 
+        attribute names -> values that you would like stored for the
         specified `item` or a list of (<attribute name>, <value>, <replace>)
         tuples.
 
-        By default, attributes are "replaced". This causes new attribute values to 
-        overwrite existing values. For example, if an item has the attributes 
-        ('a', '1'), ('b', '2') and ('b', '3') and you call put_attributes using 
-        the attributes ('b', '4'), the final attributes of the item are changed to 
-        ('a', '1') and ('b', '4'), which replaces the previous value of the 'b' 
+        By default, attributes are "replaced". This causes new attribute values to
+        overwrite existing values. For example, if an item has the attributes
+        ('a', '1'), ('b', '2') and ('b', '3') and you call put_attributes using
+        the attributes ('b', '4'), the final attributes of the item are changed to
+        ('a', '1') and ('b', '4'), which replaces the previous value of the 'b'
         attribute with the new value.
 
         SimpleDB allows you to associate multiple values with a single attribute.
@@ -419,12 +418,12 @@ class SimpleDB(object):
         The `domain` argument can be a string representing the name of the
         domain or a `Domain` object.
 
-        The `items` argument should be a list of `Item` objects or a list of 
+        The `items` argument should be a list of `Item` objects or a list of
         (<item name>, <attributes>) tuples. See the documentation for the
-        put_attribute method for a description of how attributes should be 
+        put_attribute method for a description of how attributes should be
         represented.
         """
-        
+
         if isinstance(domain, Domain):
             domain = domain.name
 
@@ -479,7 +478,7 @@ class SimpleDB(object):
         i = 0
         for name, values in attributes.iteritems():
             if values == None:
-                data['Attribute.%s.Name' % i] = name    
+                data['Attribute.%s.Name' % i] = name
                 continue
             if isinstance(values, str):
                 values = [values]
@@ -494,13 +493,13 @@ class SimpleDB(object):
     def get_attributes(self, domain, item, attributes=None):
         """
         Returns all of the attributes associated with the item.
-        
+
         The returned attributes can be limited by passing a list of attribute
         names in the optional `attributes` argument.
 
         If the item does not exist, an empty set is returned. An error is not
         raised because SimpleDB provides no guarantee that the item does not
-        exist on another replica. In other words, if you fetch attributes that 
+        exist on another replica. In other words, if you fetch attributes that
         should exist, but get an empty set, you may have better luck if you try
         again in a few hundred milliseconds.
         """
@@ -564,7 +563,7 @@ class SimpleDB(object):
                 name = item.findtext('{%s}Name' % self.ns)
                 attributes = self._parse_attributes(domain, item)
                 yield Item(self, domain, name, attributes)
-                
+
             # SimpleDB will return a max of 100 items per request, and
             # will return a NextToken if there are more.
             next_token = item_node.find('{%s}NextToken' % self.ns)
@@ -656,7 +655,7 @@ class where(object):
         if len(self.children) < 2:
             self.connector = conn
         if self.connector == conn:
-            if isinstance(other, where) and (other.connector == conn or 
+            if isinstance(other, where) and (other.connector == conn or
                     len(other) <= 1):
                 self.children.extend(other.children)
             else:
@@ -668,24 +667,22 @@ class where(object):
 
     def _make_condition(self, attribute, operation, value, encoder):
         value = encoder(attribute, value)
-        return "%s %s '%s'" % (self._quote_attribute(attribute), 
+        return "%s %s '%s'" % (self._quote_attribute(attribute),
                                     operation, self._quote(value))
 
     def _make_eq_condition(self, attribute, operation, value, encoder):
-        value = encoder(attribute, value)
-        if value is None:
+        if encoder(attribute, value) is None:
             return '%s IS NULL' % attribute
         return self._make_condition(attribute, operation, value, encoder)
 
     def _make_noteq_condition(self, attribute, operation, value, encoder):
-        value = encoder(attribute, value)
-        if value is None:
+        if encoder(attribute, value) is None:
             return '%s IS NOT NULL' % attribute
         return self._make_condition(attribute, operation, value, encoder)
 
     def _make_in_condition(self, attribute, operation, value, encoder):
         value = [encoder(attribute, v) for v in value]
-        return '%s %s(%s)' % (attribute, operation, 
+        return '%s %s(%s)' % (attribute, operation,
                               ', '.join("'%s'" % self._quote(v) for v in value))
 
     def _make_btwn_condition(self, attribute, operation, value, encoder):
@@ -716,7 +713,7 @@ class where(object):
         obj = self._clone()
         obj.add(other, conn)
         return obj
-    
+
     def __or__(self, other):
         return self._combine(other, self.OR)
 
@@ -848,7 +845,7 @@ class Query(object):
 
     def to_expression(self):
         """
-        Creates the query expression for this query. Returns the expression 
+        Creates the query expression for this query. Returns the expression
         string.
         """
 
@@ -905,7 +902,7 @@ class ItemNameQuery(Query):
 
     def _get_results(self):
         if self._result_cache is None:
-            self._result_cache = [item.name for item in 
+            self._result_cache = [item.name for item in
                                   self.domain.select(self.to_expression())]
         return self._result_cache
 
@@ -967,7 +964,7 @@ class Domain(object):
         self.simpledb.delete_attributes(self, name)
         if name in self.items:
             del self.items[name]
-    
+
     def __unicode__(self):
         return self.name
 
@@ -995,7 +992,7 @@ class Item(DictMixin):
 
     def __getitem__(self, name):
         return self.attributes[name]
-    
+
     def __setitem__(self, name, value):
         self.attributes[name] = value
 

@@ -135,7 +135,7 @@ class Query(simpledb.Query):
     def _get_results(self):
         if self._result_cache is None:
             self._result_cache = [self.domain.model.from_item(item) for item in
-                                  self.domain.select(self.to_expression())]
+                                  self.domain.select(self.to_expression())['items']]
         return self._result_cache
 
 
@@ -296,8 +296,8 @@ class Model(object):
 
     def __init__(self, **kwargs):
         if config.AUTO_GENERATE_MISSING_KEY and \
-                not kwargs.get('id'):
-            self.id = uuid.uuid4()
+                not kwargs.get(self._name_field):
+            setattr(self, self._name_field, uuid.uuid4())
         for name, value in kwargs.items():
             setattr(self, name, value)
         self._item = None
@@ -318,7 +318,7 @@ class Model(object):
                 else:
                     del self._item[name]
                     continue
-            self._item[name] = field.encode(getattr(self, name))
+            self._item[name] = value
         self._item.save()
 
     def delete(self):
@@ -337,6 +337,6 @@ class Model(object):
                 if isinstance(obj.__getattribute__(name), list) and isinstance(obj._item[name], str):
                     obj._item[name] = [obj._item[name]]
                 ##
-                setattr(obj, name, field.decode(obj._item[name]))
-        setattr(obj, obj._name_field, field.decode(obj._item.name))
+                setattr(obj, name, obj._item[name])
+        setattr(obj, obj._name_field, obj._item.name)
         return obj
