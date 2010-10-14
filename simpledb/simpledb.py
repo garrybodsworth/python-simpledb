@@ -550,8 +550,8 @@ class SimpleDB(object):
             'Action': 'Select',
             'SelectExpression': expression,
         }
-        if next_token:
-            data['NextToken'] = next_token
+        if next_token is not None:
+            data['NextToken'] = next_token.text
 
         request = Request("POST", self._sdb_url(), data)
         response = self._make_request(request)
