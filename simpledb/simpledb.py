@@ -1,3 +1,4 @@
+import sys
 import urlparse
 import urllib
 import urllib2
@@ -40,6 +41,28 @@ RESERVED_KEYWORDS = (
 
 class SimpleDBError(Exception): pass
 class ItemDoesNotExist(Exception): pass
+
+
+def _do_make_request(request, headers, timeout=10):
+    """
+    Fix so that you can use Python2.5 and 2.6+ for url requests.
+    """
+    is_python25 = (sys.version[:3] == '2.5')
+    req = urllib2.Request(request.url, headers)
+    if is_python25:
+        import threading
+        response = urllib2.urlopen(req, data=request.to_postdata())
+        def handler(fh):
+            fh.close()
+        t = threading.Timer(float(timeout), handler,[response])
+        t.start()
+    else:
+        response = urllib2.urlopen(req, data=request.to_postdata(), timeout=timeout)
+    content = response.read()
+    if is_python25:
+        t.cancel()
+
+    return response, content
 
 
 def generate_timestamp():
@@ -231,9 +254,7 @@ class SimpleDB(object):
                    'host': self.db}
         request.set_parameter('Version', self.service_version)
         request.sign_request(self.signature_method(), self.aws_key, self.aws_secret)
-        req = urllib2.Request(request.url, headers)
-        response = urllib2.urlopen(req, request.to_postdata(), 10)
-        content = response.read()
+        response, content = _do_make_request(request, headers)
         e = ET.fromstring(content)
 
         error = e.find('Errors/Error')
